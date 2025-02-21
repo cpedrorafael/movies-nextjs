@@ -79,9 +79,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+
     const validatedMovie = movieSchema.parse(body);
 
     const result = await db.insert(movies).values(validatedMovie);
+    
     const movieId = Number(result.lastInsertRowid);
 
     if (body.actors) {

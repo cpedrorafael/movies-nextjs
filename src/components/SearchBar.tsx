@@ -102,31 +102,42 @@ export function SearchBar({ onMovieAdd, watchlist }: SearchBarProps) {
         body: JSON.stringify(movieData),
       });
 
-      if (saveResponse.ok) {
-        const savedMovie = await saveResponse.json();
-        
-        // Then add it directly to the watchlist
-        const watchlistResponse = await fetch('/api/watchlist', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ 
-            movieId: savedMovie.movie.id,
-            watched: false 
-          }),
-        });
-
-        if (watchlistResponse.ok) {
-          onMovieAdd(savedMovie.movie);
-          setShowResults(false);
-          setQuery('');
-          toast.success('Movie added to watchlist');
-        }
+      if (!saveResponse.ok) {
+        const error = await saveResponse.json();
+        throw new Error(error.error || 'Failed to save movie');
       }
+
+      const savedMovie = await saveResponse.json();
+      
+      // Close dialog and clear search before making the second API call
+      setShowResults(false);
+      setQuery('');
+
+      // Then add it directly to the watchlist
+      const watchlistResponse = await fetch('/api/watchlist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          movieId: savedMovie.movie.id,
+          watched: false 
+        }),
+      });
+
+      if (!watchlistResponse.ok) {
+        const error = await watchlistResponse.json();
+        throw new Error(error.error || 'Failed to add to watchlist');
+      }
+
+      const watchlistResult = await watchlistResponse.json();
+      onMovieAdd(watchlistResult.movie);
+      toast.success('Movie added to watchlist');
     } catch (error) {
       console.error('Error saving movie:', error);
-      toast.error('Failed to add movie');
+      toast.error(error instanceof Error ? error.message : 'Failed to add movie');
+      // Reopen dialog if there was an error
+      setShowResults(true);
     }
   };
 
@@ -156,7 +167,7 @@ export function SearchBar({ onMovieAdd, watchlist }: SearchBarProps) {
             <div className="grid gap-4">
               {searchResults.map((movie) => (
                 <div
-                  key={movie.Title}
+                  key={`${movie.Title}-${movie.Year}`}
                   className="flex items-start gap-4 p-4 border rounded-lg bg-card"
                 >
                   {movie.Poster !== 'N/A' && (

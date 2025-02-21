@@ -2,7 +2,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import Database from 'better-sqlite3';
 import { join } from 'path';
 
-const DB_PATH = join(process.cwd(), 'src', 'app', 'api', 'movies.db');
+const DB_PATH = join(process.cwd(), 'movies.db');
 
 const sqlite = new Database(DB_PATH);
 export const db = drizzle(sqlite);

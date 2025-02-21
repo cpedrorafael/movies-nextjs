@@ -6,6 +6,6 @@ export default {
   out: './drizzle',
   driver: 'better-sqlite',
   dbCredentials: {
-    url: join(process.cwd(), 'src', 'app', 'api', 'movies.db'),
+    url: join(process.cwd(), 'movies.db'),
   },
 } satisfies Config;

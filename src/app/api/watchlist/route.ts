@@ -38,7 +38,23 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+
     const validatedWatchlist = watchlistSchema.parse(body);
+
+    // First verify that the movie exists
+    const movieExists = await db
+      .select()
+      .from(movies)
+      .where(eq(movies.id, validatedWatchlist.movieId))
+      .get();
+
+
+    if (!movieExists) {
+      return NextResponse.json(
+        { error: 'Movie not found' },
+        { status: 404 }
+      );
+    }
 
     // Check if movie is already in watchlist
     const existingEntry = await db
@@ -52,29 +68,29 @@ export async function POST(request: Request) {
       )
       .get();
 
-    if (existingEntry) {
-      // Remove from watchlist
-      await db
-        .delete(userWatchlist)
-        .where(eq(userWatchlist.id, existingEntry.id));
 
+    if (existingEntry) {
+      console.log('POST /api/watchlist - Movie already in watchlist:', existingEntry.id);
       return NextResponse.json({ success: true });
     }
 
     // Add to watchlist
-    await db.insert(userWatchlist).values({
+    const result = await db.insert(userWatchlist).values({
       userId: DEFAULT_USER_ID,
       movieId: validatedWatchlist.movieId,
       watched: validatedWatchlist.watched ?? false,
     });
 
-    const movie = await db
-      .select()
-      .from(movies)
-      .where(eq(movies.id, validatedWatchlist.movieId))
-      .get();
+    console.log('POST /api/watchlist - Insert result:', result);
 
-    return NextResponse.json({ movie }, { status: 201 });
+    if (!result.lastInsertRowid) {
+      console.log('POST /api/watchlist - Insert failed, no lastInsertRowid');
+      throw new Error('Failed to insert into watchlist');
+    }
+
+    console.log('POST /api/watchlist - Successfully added movie to watchlist');
+
+    return NextResponse.json({ movie: movieExists }, { status: 201 });
   } catch (error) {
     console.error('Error updating watchlist:', error);
     return NextResponse.json(
