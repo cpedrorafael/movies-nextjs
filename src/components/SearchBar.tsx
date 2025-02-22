@@ -14,6 +14,7 @@ interface Movie {
   Director: string;
   Plot: string;
   Poster: string;
+  imdbID: string;
   imdbRating: string;
   Ratings: Array<{ Source: string; Value: string }>;
 }
@@ -62,6 +63,7 @@ export function SearchBar({ onMovieAdd, watchlist }: SearchBarProps) {
         director: movie.Director,
         plot: movie.Plot,
         posterUrl: movie.Poster,
+        imdbID: movie.imdbID,
         imdbRating: parseFloat(movie.imdbRating) || null,
         rottenTomatoesRating: rottenTomatoesRating
           ? parseInt(rottenTomatoesRating)

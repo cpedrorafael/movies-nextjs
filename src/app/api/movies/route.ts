@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { movies, actors, genres, movieActors, movieGenres } from '@/lib/db/schema';
-import { eq, inArray, like, and, or } from 'drizzle-orm';
-import { movieSchema } from '../config';
-import { sql } from 'drizzle-orm';
+import { eq, inArray, like, and } from 'drizzle-orm';
+import { fetchAndSaveMovieDetails } from './movieService';
 
 export async function GET(request: Request) {
   try {
@@ -79,63 +78,10 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    console.log(body);
 
-    const validatedMovie = movieSchema.parse(body);
-
-    const result = await db.insert(movies).values(validatedMovie);
-    
-    const movieId = Number(result.lastInsertRowid);
-
-    if (body.actors) {
-      for (const actorName of body.actors) {
-        let actor = await db
-          .select()
-          .from(actors)
-          .where(eq(actors.name, actorName))
-          .get();
-
-        if (!actor) {
-          const result = await db
-            .insert(actors)
-            .values({ name: actorName });
-          actor = { id: Number(result.lastInsertRowid), name: actorName };
-        }
-
-        await db.insert(movieActors).values({
-          movieId,
-          actorId: actor.id,
-        });
-      }
-    }
-
-    if (body.genres) {
-      for (const genreName of body.genres) {
-        let genre = await db
-          .select()
-          .from(genres)
-          .where(eq(genres.name, genreName))
-          .get();
-
-        if (!genre) {
-          const result = await db
-            .insert(genres)
-            .values({ name: genreName });
-          genre = { id: Number(result.lastInsertRowid), name: genreName };
-        }
-
-        await db.insert(movieGenres).values({
-          movieId,
-          genreId: genre.id,
-        });
-      }
-    }
-
-    const movie = await db
-      .select()
-      .from(movies)
-      .where(eq(movies.id, movieId))
-      .get();
-
+    const movie = await fetchAndSaveMovieDetails(body.imdbID);
+  
     return NextResponse.json({ movie }, { status: 201 });
   } catch (error) {
     console.error('Error creating movie:', error);

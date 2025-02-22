@@ -17,6 +17,7 @@
     "@radix-ui/react-scroll-area": "^1.2.3",
     "@radix-ui/react-tabs": "^1.0.4",
     "@tailwindcss/line-clamp": "^0.4.4",
+    "axios": "^1.7.9",
     "better-sqlite3": "^9.4.3",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
@@ -32,6 +33,7 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@types/axios": "^0.9.36",
     "@types/better-sqlite3": "^7.6.9",
     "@types/node": "^20",
     "@types/react": "^18",

@@ -28,9 +28,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: data.Error }, { status: 404 });
     }
 
-    // Get detailed information for each movie
     const detailedMovies = await Promise.all(
-      data.Search.slice(0, 5).map(async (movie: any) => {
+      data.Search.slice(0, 10).map(async (movie: any) => {
         const detailResponse = await fetch(
           `${OMDB_API_URL}/?apikey=${OMDB_API_KEY}&i=${movie.imdbID}`
         );

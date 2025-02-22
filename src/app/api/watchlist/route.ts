@@ -3,10 +3,10 @@ import { db } from '@/lib/db';
 import { movies, userWatchlist } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { watchlistSchema } from '../config';
-import { sql } from 'drizzle-orm';
 
-// Since we don't have auth yet, we'll use a default user ID
 const DEFAULT_USER_ID = 'default-user';
+const OMDB_API_KEY = process.env.OMDB_API_KEY;
+const OMDB_API_URL = 'http://www.omdbapi.com';
 
 export async function GET(request: Request) {
   try {
@@ -39,9 +39,9 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
+    console.log(body);
     const validatedWatchlist = watchlistSchema.parse(body);
 
-    // First verify that the movie exists
     const movieExists = await db
       .select()
       .from(movies)
@@ -56,7 +56,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if movie is already in watchlist
     const existingEntry = await db
       .select()
       .from(userWatchlist)
@@ -70,31 +69,49 @@ export async function POST(request: Request) {
 
 
     if (existingEntry) {
-      console.log('POST /api/watchlist - Movie already in watchlist:', existingEntry.id);
       return NextResponse.json({ success: true });
     }
 
-    // Add to watchlist
     const result = await db.insert(userWatchlist).values({
       userId: DEFAULT_USER_ID,
       movieId: validatedWatchlist.movieId,
       watched: validatedWatchlist.watched ?? false,
     });
 
-    console.log('POST /api/watchlist - Insert result:', result);
-
     if (!result.lastInsertRowid) {
-      console.log('POST /api/watchlist - Insert failed, no lastInsertRowid');
       throw new Error('Failed to insert into watchlist');
     }
 
-    console.log('POST /api/watchlist - Successfully added movie to watchlist');
 
     return NextResponse.json({ movie: movieExists }, { status: 201 });
   } catch (error) {
     console.error('Error updating watchlist:', error);
     return NextResponse.json(
       { error: 'Failed to update watchlist' },
+      { status: 500 }
+    );
+  }
+}
+
+
+async function getMovieDetails(movieId: string) {
+  if (!OMDB_API_KEY) {
+    return NextResponse.json(
+      { error: 'Failed to fetch movie details' },
+      { status: 500 }
+    );
+  }
+
+  try {
+    const response = await fetch(
+      `${OMDB_API_URL}/?apikey=${OMDB_API_KEY}&i=${movieId}`
+    );
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching movie details:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch movie details' },
       { status: 500 }
     );
   }
