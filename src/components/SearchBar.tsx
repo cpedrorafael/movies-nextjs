@@ -104,7 +104,7 @@ export function SearchBar({ onMovieAdd, watchlist }: SearchBarProps) {
         body: JSON.stringify(movieData),
       });
 
-      if (!saveResponse.ok) {
+      if (saveResponse.status !== 201) {
         const error = await saveResponse.json();
         throw new Error(error.error || 'Failed to save movie');
       }

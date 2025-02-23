@@ -51,7 +51,9 @@ export async function fetchAndSaveMovieDetails(imdb_id: string): Promise<Movie> 
         Response: omdbResponse.data.Response
     };
 
-    await db.insert(movies).values(mapMovieToDb(movieData));
+    const result = await db.insert(movies).values(mapMovieToDb(movieData));
+
+    movieData.id = Number(result.lastInsertRowid);
 
     return movieData;
   } catch (error) {
