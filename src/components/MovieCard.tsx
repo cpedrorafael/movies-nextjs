@@ -2,6 +2,7 @@ import React from 'react';
 import Image from 'next/image';
 import { Button } from './ui/button';
 import { BookmarkIcon, BookmarkCheck } from 'lucide-react';
+import Link from 'next/link';
 
 interface MovieCardProps {
   movie: {
@@ -26,6 +27,7 @@ export function MovieCard({
   id,
 }: MovieCardProps) {
   return (
+    <Link href={`/movies/${movie.id}`}>
     <div
       id={id}
       className="bg-card rounded-lg shadow-md overflow-hidden"
@@ -93,5 +95,6 @@ export function MovieCard({
         </div>
       </div>
     </div>
+    </Link>
   );
 }

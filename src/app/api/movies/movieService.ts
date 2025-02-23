@@ -62,3 +62,13 @@ export async function fetchAndSaveMovieDetails(imdb_id: string): Promise<Movie> 
   }
 }
 
+// app/api/movies/movieService.ts
+export async function fetchMovieById(id: string): Promise<Movie | null> {
+    try {
+      const movie = await db.select().from(movies).where(eq(movies.id, Number(id))).get();
+      return movie ? mapDbToMovie(movie) : null;
+    } catch (error) {
+      console.error('Error fetching movie by ID:', error);
+      return null;
+    }
+  }
