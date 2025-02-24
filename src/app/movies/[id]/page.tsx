@@ -1,12 +1,7 @@
 import { fetchMovieById } from '@/app/api/movies/movieService';
 
-interface PageProps {
-  params: {
-    id: string;
-  };
-}
-
-export default async function MovieDetailsPage({ params }: PageProps) {
+export default async function MovieDetailsPage({ params }: { params: { id: string } }) {
+  // No need to await params
   const movie = await fetchMovieById(params.id);
 
   if (!movie) {
