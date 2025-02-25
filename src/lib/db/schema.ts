@@ -101,14 +101,3 @@ export const userWatchlist = sqliteTable('user_watchlist', {
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
 });
-
-export const watchlists = sqliteTable('watchlists', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  userId: text('user_id').notNull(),
-  movieId: integer('movie_id')
-    .references(() => movies.id)
-    .notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' })
-    .notNull()
-    .default(sql`CURRENT_TIMESTAMP`),
-});

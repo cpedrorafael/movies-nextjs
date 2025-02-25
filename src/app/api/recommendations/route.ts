@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getRecommendations, getTopRatedMovies } from './recommendationUtil';
 import { db } from '@/lib/db';
-import { movies, watchlists } from '@/lib/db/schema';
+import { movies, userWatchlist } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 
 export async function GET(request: Request) {
@@ -54,12 +54,12 @@ export async function POST(request: Request) {
 
     // Check if movie is already in watchlist
     const existingEntry = await db
-      .select({ id: watchlists.id })
-      .from(watchlists)
+      .select({ id: userWatchlist.id })
+      .from(userWatchlist)
       .where(
         and(
-          eq(watchlists.movieId, movieId),
-          eq(watchlists.userId, userId)
+          eq(userWatchlist.movieId, movieId),
+          eq(userWatchlist.userId, userId)
         )
       )
       .limit(1);
@@ -72,7 +72,7 @@ export async function POST(request: Request) {
     }
 
     // Add movie to watchlist
-    await db.insert(watchlists).values({
+    await db.insert(userWatchlist).values({
       userId,
       movieId,
     });

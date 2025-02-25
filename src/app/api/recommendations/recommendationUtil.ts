@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { movies, watchlists } from '@/lib/db/schema';
+import { movies, userWatchlist } from '@/lib/db/schema';
 import { and, eq, notInArray, sql } from 'drizzle-orm';
 import { findBestMatch } from 'string-similarity';
 
@@ -47,8 +47,8 @@ export async function getRecommendations(userId: string, topN = 5): Promise<Movi
       plot: movies.plot,
     })
     .from(movies)
-    .innerJoin(watchlists, eq(movies.id, watchlists.movieId))
-    .where(eq(watchlists.userId, userId));
+    .innerJoin(userWatchlist, eq(movies.id, userWatchlist.movieId))
+    .where(eq(userWatchlist.userId, userId));
 
   if (watchlistMovies.length === 0) {
     const topRated = await db

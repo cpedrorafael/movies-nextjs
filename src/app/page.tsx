@@ -18,6 +18,7 @@ interface Movie {
 }
 
 export default function Home() {
+  const [userId] = useState('default-user');
   const [watchlist, setWatchlist] = useState<Movie[]>([]);
   const [recommendations, setRecommendations] = useState<Movie[]>([]);
   const [recommendationContext, setRecommendationContext] = useState<{ directors: string[] }>({ directors: [] });
@@ -28,7 +29,7 @@ export default function Home() {
   useEffect(() => {
     const fetchWatchlist = async () => {
       try {
-        const response = await fetch('/api/watchlist');
+        const response = await fetch(`/api/watchlist?userId=${userId}`);
         if (response.ok) {
           const data = await response.json();
           setWatchlist(Array.isArray(data.movies) ? data.movies : []);
@@ -42,16 +43,15 @@ export default function Home() {
     };
 
     fetchWatchlist();
-  }, []);
+  }, [userId]);
 
-  // Fetch recommendations whenever watchlist changes
   useEffect(() => {
     const fetchRecommendations = async () => {
       try {
-        const response = await fetch('/api/recommendations');
+        const response = await fetch(`/api/recommendations?userId=${userId}`);
         if (response.ok) {
           const data = await response.json();
-          setRecommendations(Array.isArray(data.movies) ? data.movies : []);
+          setRecommendations(Array.isArray(data) ? data : []); 
           setRecommendationContext(data.basedOn || { directors: [] });
         }
       } catch (error) {
@@ -61,7 +61,7 @@ export default function Home() {
     };
 
     fetchRecommendations();
-  }, [watchlist]); // Re-run when watchlist changes
+  }, [userId, watchlist]);
 
   const handleMovieAdd = async (movie: Movie) => {
     // First add to watchlist
@@ -73,12 +73,12 @@ export default function Home() {
         },
         body: JSON.stringify({ 
           movieId: movie.id,
-          watched: false 
+          watched: false,
+          userId: userId
         }),
       });
 
       if (response.ok) {
-        // Update local state
         setWatchlist(prev => [...prev, movie]);
         // Remove from recommendations
         setRecommendations(prev => prev.filter(m => m.id !== movie.id));
@@ -97,7 +97,8 @@ export default function Home() {
         },
         body: JSON.stringify({ 
           movieId: movieId,
-          watched: false 
+          watched: false,
+          userId: userId
         }),
       });
 
@@ -163,7 +164,7 @@ export default function Home() {
               ) : (
                 <>
                   <div className="mb-4 text-sm text-muted-foreground">
-                    Recommendations based on directors you like: {recommendationContext.directors.join(', ')}
+                    Recommendations based on your watchlist 
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {recommendations.map((movie) => (
