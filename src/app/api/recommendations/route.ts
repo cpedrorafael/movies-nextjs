@@ -1,72 +1,86 @@
 import { NextResponse } from 'next/server';
+import { getRecommendations, getTopRatedMovies } from './recommendationUtil';
 import { db } from '@/lib/db';
-import { movies, userWatchlist } from '@/lib/db/schema';
-import { eq, inArray, and, isNull } from 'drizzle-orm';
-
-const DEFAULT_USER_ID = 'default-user';
+import { movies, watchlists } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
 
 export async function GET(request: Request) {
   try {
-    // First get the user's watchlist movies
-    const watchlistMovies = await db
-      .select({
-        id: movies.id,
-        title: movies.title,
-        director: movies.director,
-      })
-      .from(movies)
-      .innerJoin(userWatchlist, eq(movies.id, userWatchlist.movieId))
-      .where(eq(userWatchlist.userId, DEFAULT_USER_ID));
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('userId');
+    const limit = searchParams.get('limit');
 
-    // If watchlist is empty, return empty recommendations
-    if (watchlistMovies.length === 0) {
-      return NextResponse.json({
-        movies: [],
-        basedOn: { directors: [] }
-      });
+    if (!userId) {
+      const topMovies = await getTopRatedMovies(limit ? parseInt(limit) : 5);
+      return NextResponse.json(topMovies);
     }
 
-    // Get directors from watchlist
-    const directors = [...new Set(watchlistMovies.map(movie => movie.director))];
+    const recommendations = await getRecommendations(userId, limit ? parseInt(limit) : 5);
+    return NextResponse.json(recommendations);
 
-    // Get movies by the same directors, explicitly excluding watchlist movies
-    const directorRecommendations = await db
-      .select({
-        id: movies.id,
-        title: movies.title,
-        year: movies.year,
-        director: movies.director,
-        plot: movies.plot,
-        posterUrl: movies.posterUrl,
-        imdbRating: movies.imdbRating,
-        rottenTomatoesRating: movies.rottenTomatoesRating,
-      })
-      .from(movies)
-      .leftJoin(
-        userWatchlist,
-        and(
-          eq(movies.id, userWatchlist.movieId),
-          eq(userWatchlist.userId, DEFAULT_USER_ID)
-        )
-      )
-      .where(
-        and(
-          inArray(movies.director, directors),
-          isNull(userWatchlist.id)
-        )
-      )
-      .limit(20);
-
-    return NextResponse.json({ 
-      movies: directorRecommendations,
-      basedOn: {
-        directors: directors
-      }
-    });
   } catch (error) {
     console.error('Error getting recommendations:', error);
     return NextResponse.json(
       { error: 'Failed to get recommendations' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const { userId, movieId } = await request.json();
+
+    if (!userId || !movieId) {
+      return NextResponse.json(
+        { error: 'Missing userId or movieId' },
+        { status: 400 }
+      );
+    }
+
+    // Check if movie exists
+    const movieExists = await db
+      .select({ id: movies.id })
+      .from(movies)
+      .where(eq(movies.id, movieId))
+      .limit(1);
+
+    if (movieExists.length === 0) {
+      return NextResponse.json(
+        { error: `Movie with ID ${movieId} not found` },
+        { status: 404 }
+      );
+    }
+
+    // Check if movie is already in watchlist
+    const existingEntry = await db
+      .select({ id: watchlists.id })
+      .from(watchlists)
+      .where(eq(watchlists.movieId, movieId))
+      .where(eq(watchlists.userId, userId))
+      .limit(1);
+
+    if (existingEntry.length > 0) {
+      return NextResponse.json(
+        { error: 'Movie already in watchlist' },
+        { status: 409 }
+      );
+    }
+
+    // Add movie to watchlist
+    await db.insert(watchlists).values({
+      userId,
+      movieId,
+    });
+
+    return NextResponse.json({ 
+      success: true,
+      message: `Added movie ${movieId} to watchlist for user ${userId}`
+    });
+  } catch (error) {
+    console.error('Error adding to watchlist:', error);
+    return NextResponse.json(
+      { error: 'Failed to add to watchlist' },
       { status: 500 }
     );
   }
