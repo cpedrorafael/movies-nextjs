@@ -11,8 +11,10 @@ export async function GET(request: Request) {
     const limit = searchParams.get('limit');
 
     if (!userId) {
-      const topMovies = await getTopRatedMovies(limit ? parseInt(limit) : 5);
-      return NextResponse.json(topMovies);
+      return NextResponse.json(
+        { error: 'User ID is required' },
+        { status: 400 }
+      );
     }
 
     const recommendations = await getRecommendations(userId, limit ? parseInt(limit) : 5);
@@ -29,11 +31,18 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { userId, movieId } = await request.json();
+    const { movieId, userId } = await request.json();
 
-    if (!userId || !movieId) {
+    if (!userId) {
       return NextResponse.json(
-        { error: 'Missing userId or movieId' },
+        { error: 'User ID is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!movieId) {
+      return NextResponse.json(
+        { error: 'Movie ID is required' },
         { status: 400 }
       );
     }
@@ -47,7 +56,7 @@ export async function POST(request: Request) {
 
     if (movieExists.length === 0) {
       return NextResponse.json(
-        { error: `Movie with ID ${movieId} not found` },
+        { error: 'Movie not found' },
         { status: 404 }
       );
     }
@@ -67,7 +76,7 @@ export async function POST(request: Request) {
     if (existingEntry.length > 0) {
       return NextResponse.json(
         { error: 'Movie already in watchlist' },
-        { status: 409 }
+        { status: 400 }
       );
     }
 
@@ -77,14 +86,12 @@ export async function POST(request: Request) {
       movieId,
     });
 
-    return NextResponse.json({ 
-      success: true,
-      message: `Added movie ${movieId} to watchlist for user ${userId}`
-    });
+    return NextResponse.json({ success: true });
+
   } catch (error) {
-    console.error('Error adding to watchlist:', error);
+    console.error('Error updating watchlist:', error);
     return NextResponse.json(
-      { error: 'Failed to add to watchlist' },
+      { error: 'Failed to update watchlist' },
       { status: 500 }
     );
   }

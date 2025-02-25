@@ -5,6 +5,9 @@ import { SearchBar } from '@/components/SearchBar';
 import { MovieCard } from '@/components/MovieCard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useAuth0 } from '@auth0/auth0-react';
+import { Button } from '@/components/ui/button';
+import { useRouter } from 'next/navigation';
 
 interface Movie {
   id: number;
@@ -18,53 +21,50 @@ interface Movie {
 }
 
 export default function Home() {
-  const [userId] = useState('default-user');
+  const router = useRouter();
+  const { user, logout, isAuthenticated, isLoading: isAuthLoading } = useAuth0();
   const [watchlist, setWatchlist] = useState<Movie[]>([]);
   const [recommendations, setRecommendations] = useState<Movie[]>([]);
-  const [recommendationContext, setRecommendationContext] = useState<{ directors: string[] }>({ directors: [] });
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("watchlist");
 
-  // Fetch watchlist
   useEffect(() => {
-    const fetchWatchlist = async () => {
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+
+    if (!isAuthenticated || isAuthLoading) return;
+
+    const fetchData = async () => {
+      setIsLoading(true);
       try {
-        const response = await fetch(`/api/watchlist?userId=${userId}`);
-        if (response.ok) {
-          const data = await response.json();
+        const watchlistResponse = await fetch(`/api/watchlist?userId=${user?.sub}`);
+        if (watchlistResponse.ok) {
+          const data = await watchlistResponse.json();
           setWatchlist(Array.isArray(data.movies) ? data.movies : []);
-          setIsLoading(false);
+        }
+
+        const recommendationsResponse = await fetch(`/api/recommendations?userId=${user?.sub}`);
+        if (recommendationsResponse.ok) {
+          const data = await recommendationsResponse.json();
+          setRecommendations(Array.isArray(data) ? data : []);
         }
       } catch (error) {
-        console.error('Error fetching watchlist:', error);
+        console.error('Error fetching data:', error);
         setWatchlist([]);
+        setRecommendations([]);
+      } finally {
         setIsLoading(false);
       }
     };
 
-    fetchWatchlist();
-  }, [userId]);
-
-  useEffect(() => {
-    const fetchRecommendations = async () => {
-      try {
-        const response = await fetch(`/api/recommendations?userId=${userId}`);
-        if (response.ok) {
-          const data = await response.json();
-          setRecommendations(Array.isArray(data) ? data : []); 
-          setRecommendationContext(data.basedOn || { directors: [] });
-        }
-      } catch (error) {
-        console.error('Error fetching recommendations:', error);
-        setRecommendations([]);
-      }
-    };
-
-    fetchRecommendations();
-  }, [userId, watchlist]);
+    fetchData();
+  }, [user?.sub, isAuthenticated, isAuthLoading, router]);
 
   const handleMovieAdd = async (movie: Movie) => {
-    // First add to watchlist
+    if (!isAuthenticated || isAuthLoading) return;
+
     try {
       const response = await fetch('/api/watchlist', {
         method: 'POST',
@@ -73,115 +73,107 @@ export default function Home() {
         },
         body: JSON.stringify({ 
           movieId: movie.id,
-          watched: false,
-          userId: userId
+          userId: user?.sub
         }),
       });
 
       if (response.ok) {
         setWatchlist(prev => [...prev, movie]);
-        // Remove from recommendations
         setRecommendations(prev => prev.filter(m => m.id !== movie.id));
       }
     } catch (error) {
-      console.error('Error adding to watchlist:', error);
+      console.error('Error adding movie to watchlist:', error);
     }
   };
 
-  const handleToggleWatched = async (movieId: number) => {
-    try {
-      const response = await fetch('/api/watchlist', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          movieId: movieId,
-          watched: false,
-          userId: userId
-        }),
-      });
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
-      if (response.ok) {
-        setWatchlist(prev => prev.filter(m => m.id !== movieId));
-      }
-    } catch (error) {
-      console.error('Error updating watchlist:', error);
-    }
-  };
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
-    <main className="container mx-auto px-4 py-8 h-screen flex flex-col">
-      <h1 className="text-3xl font-bold mb-8">Movie Tracker</h1>
-      
-      <div className="mb-8">
-        <SearchBar onMovieAdd={handleMovieAdd} watchlist={watchlist} />
+    <main className="container mx-auto py-4 px-4 space-y-4">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Movies App</h1>
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-muted-foreground">
+            {user?.name || user?.email}
+          </span>
+          <Button
+            variant="outline"
+            onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
+          >
+            Sign out
+          </Button>
+        </div>
       </div>
 
-      {isLoading ? (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-lg text-muted-foreground">Loading...</div>
-        </div>
-      ) : (
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-          <TabsList className="mb-4">
-            <TabsTrigger value="watchlist">
-              Watchlist {watchlist.length > 0 && `(${watchlist.length})`}
-            </TabsTrigger>
-            <TabsTrigger value="discover">
-              Discover {recommendations.length > 0 && `(${recommendations.length})`}
-            </TabsTrigger>
-          </TabsList>
+      <SearchBar onMovieAdd={handleMovieAdd} watchlist={watchlist} />
 
-          <ScrollArea className="flex-1 -mx-4 px-4">
-            <TabsContent value="watchlist" className="flex-1 mt-0 data-[state=active]:flex data-[state=active]:flex-col">
-              {watchlist.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  Your watchlist is empty. Search for movies to add them!
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {watchlist.map((movie) => (
-                    <MovieCard
-                      key={movie.id}
-                      id={`movie-${movie.id}`}
-                      movie={movie}
-                      onToggleWatched={handleToggleWatched}
-                      isWatched={true}
-                    />
-                  ))}
-                </div>
-              )}
-            </TabsContent>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="watchlist">Watchlist</TabsTrigger>
+          <TabsTrigger value="recommendations">Recommendations</TabsTrigger>
+        </TabsList>
 
-            <TabsContent value="discover" className="flex-1 mt-0 data-[state=active]:flex data-[state=active]:flex-col">
-              {recommendations.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  {watchlist.length === 0 
-                    ? "Add movies to your watchlist to get personalized recommendations!"
-                    : "No recommendations found. Try adding more movies to your watchlist!"}
-                </div>
-              ) : (
-                <>
-                  <div className="mb-4 text-sm text-muted-foreground">
-                    Recommendations based on your watchlist 
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {recommendations.map((movie) => (
-                      <MovieCard
-                        key={movie.id}
-                        movie={movie}
-                        onToggleWatched={() => handleMovieAdd(movie)}
-                        isWatched={false}
-                      />
-                    ))}
-                  </div>
-                </>
-              )}
-            </TabsContent>
-          </ScrollArea>
-        </Tabs>
-      )}
+        <TabsContent value="watchlist" className="space-y-4">
+          {isLoading ? (
+            <div className="text-center">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : watchlist.length === 0 ? (
+            <div className="text-center text-muted-foreground">
+              Your watchlist is empty. Search for movies to add them here.
+            </div>
+          ) : (
+            <ScrollArea className="h-[calc(100vh-300px)]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {watchlist.map((movie) => (
+                  <MovieCard
+                    key={movie.id}
+                    movie={movie}
+                    onToggleWatched={() => {}}
+                    isWatched={true}
+                    id={`movie-${movie.id}`}
+                  />
+                ))}
+              </div>
+            </ScrollArea>
+          )}
+        </TabsContent>
+
+        <TabsContent value="recommendations" className="space-y-4">
+          {recommendations.length === 0 ? (
+            <div className="text-center text-muted-foreground">
+              Add movies to your watchlist to get personalized recommendations.
+            </div>
+          ) : (
+            <>
+              <div className="mb-4 text-sm text-muted-foreground">
+                Recommendations based on your watchlist 
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {recommendations.map((movie) => (
+                  <MovieCard
+                    key={movie.id}
+                    movie={movie}
+                    onToggleWatched={() => handleMovieAdd(movie)}
+                    isWatched={false}
+                    id={`movie-${movie.id}`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </TabsContent>
+      </Tabs>
     </main>
   );
 }
