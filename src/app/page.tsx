@@ -22,7 +22,7 @@ interface Movie {
 
 export default function Home() {
   const router = useRouter();
-  const { user, logout, isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
+  const { user, logout, isAuthenticated, isLoading} = useAuth0();
   const [watchlist, setWatchlist] = useState<Movie[]>([]);
   const [recommendations, setRecommendations] = useState<Movie[]>([]);
   const [isDataLoading, setIsDataLoading] = useState(false);
