@@ -1,5 +1,4 @@
 'use client';
-
 import { useState, useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -7,7 +6,7 @@ import { MovieCard } from '@/components/MovieCard';
 import { SearchBar } from '@/components/SearchBar';
 import { useAuth0 } from '@auth0/auth0-react';
 import { Button } from '@/components/ui/button';
-import { useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';  
 import { toast } from 'sonner';
 
 interface Movie {
@@ -23,20 +22,24 @@ interface Movie {
 
 export default function Home() {
   const router = useRouter();
-  const { user, logout, isAuthenticated } = useAuth0();
+  const { user, logout, isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
   const [watchlist, setWatchlist] = useState<Movie[]>([]);
   const [recommendations, setRecommendations] = useState<Movie[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isDataLoading, setIsDataLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("watchlist");
 
   useEffect(() => {
-    if (!user) {
+    if (!isAuthenticated) {
       router.push('/login');
       return;
-    }
+    };
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!user) return;
 
     const fetchData = async () => {
-      setIsLoading(true);
+      setIsDataLoading(true);
       try {
         const watchlistResponse = await fetch(`/api/watchlist?userId=${user.sub}`);
         if (watchlistResponse.ok) {
@@ -44,14 +47,13 @@ export default function Home() {
           setWatchlist(data.watchlist || []);
         }
 
-       fetchRecommendations();
-
+        await fetchRecommendations();
       } catch (error) {
         console.error('Error fetching data:', error);
         setWatchlist([]);
         setRecommendations([]);
       } finally {
-        setIsLoading(false);
+        setIsDataLoading(false);
       }
     };
 
@@ -60,7 +62,6 @@ export default function Home() {
 
   const handleMovieAdd = async (movie: Movie, isRemove: boolean = false) => {
     if (!user?.sub) return;
-
     try {
       const response = await fetch('/api/watchlist', {
         method: 'POST',
@@ -72,28 +73,26 @@ export default function Home() {
           userId: user.sub,
         }),
       });
-
       if (response.ok) {
         if (isRemove) {
-          setWatchlist(prev => prev.filter(m => m.id !== movie.id));
+          setWatchlist((prev) => prev.filter((m) => m.id !== movie.id));
           toast.success(`${movie.title} removed from watchlist`);
           return;
         }
-        setWatchlist(prev => [...prev, movie]);
+        setWatchlist((prev) => [...prev, movie]);
         toast.success(`${movie.title} added to watchlist`);
       }
     } catch (error) {
       console.error('Error managing watchlist:', error);
       toast.error('Failed to update watchlist');
     } finally {
-      setIsLoading(false);
+      setIsDataLoading(false);
       updateRecommendations(movie);
     }
   };
 
   const updateRecommendations = async (movie: Movie) => {
     if (!user?.sub) return;
-
     try {
       const response = await fetch('/api/recommendations', {
         method: 'POST',
@@ -105,41 +104,39 @@ export default function Home() {
           movieId: movie.id,
         }),
       });
-
       if (response.ok) {
         const data = await response.json();
         setRecommendations(data.recommendations || []);
       }
-    }catch (error) {
+    } catch (error) {
       console.error('Error updating recommendations:', error);
-    } 
-    finally {
+    } finally {
       fetchRecommendations();
     }
-  }
+  };
 
   const fetchRecommendations = async () => {
     if (!user?.sub) return;
-
     try {
       const response = await fetch('/api/recommendations?userId=' + user.sub);
       if (response.ok) {
         const data = await response.json();
-        console.log(data);
         setRecommendations(data || []);
       }
-    }catch (error) {
+    } catch (error) {
       console.error('Error fetching recommendations:', error);
     }
-  }
+  };
 
-  if (!user) {
+  // Handle authentication loading state
+  if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
   }
+
 
   return (
     <main className="container mx-auto py-4 px-4 space-y-4">
@@ -147,27 +144,26 @@ export default function Home() {
         <h1 className="text-2xl font-bold">Movies App</h1>
         <div className="flex items-center gap-4">
           <span className="text-sm text-muted-foreground">
-            {user.name || user.email}
+            {user?.name || user?.email || 'User'}
           </span>
           <Button
             variant="outline"
-            onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
+            onClick={() =>
+              logout({ logoutParams: { returnTo: window.location.origin } })
+            }
           >
             Sign out
           </Button>
         </div>
       </div>
-
       <SearchBar onMovieAdd={handleMovieAdd} watchlist={watchlist} />
-
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="watchlist">Watchlist</TabsTrigger>
           <TabsTrigger value="recommendations">Recommendations</TabsTrigger>
         </TabsList>
-
         <TabsContent value="watchlist" className="space-y-4">
-          {isLoading ? (
+          {isDataLoading ? (
             <div className="text-center">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
@@ -191,9 +187,8 @@ export default function Home() {
             </ScrollArea>
           )}
         </TabsContent>
-
         <TabsContent value="recommendations" className="space-y-4">
-          {isLoading ? (
+          {isDataLoading ? (
             <div className="text-center">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
@@ -204,7 +199,7 @@ export default function Home() {
           ) : (
             <>
               <div className="mb-4 text-sm text-muted-foreground">
-                Recommendations based on your watchlist 
+                Recommendations based on your watchlist
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {recommendations.map((movie) => (
