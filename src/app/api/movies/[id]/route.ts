@@ -3,21 +3,15 @@ import { db } from '@/lib/db';
 import { movies } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 
-type RouteContext = {
-  params: {
-    id: string;
-  };
-};
-
 export async function GET(
   request: Request,
-  context: RouteContext
+  { params }: { params: { id: string } } 
 ) {
   try {
     const movie = await db
       .select()
       .from(movies)
-      .where(eq(movies.id, parseInt(context.params.id)))
+      .where(eq(movies.id, parseInt(params.id)))
       .get();
 
     if (!movie) {
