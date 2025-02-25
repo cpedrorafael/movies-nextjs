@@ -3,10 +3,11 @@ import { fetchMovieById } from '@/app/api/movies/movieService';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } } 
 ) {
+  const id = params.id; 
+
   try {
-    const { id } = await params;
     const movie = await fetchMovieById(id);
     if (!movie) {
       return NextResponse.json(
@@ -14,7 +15,6 @@ export async function GET(
         { status: 404 }
       );
     }
-
     return NextResponse.json(movie);
   } catch (error) {
     console.error('Error fetching movie:', error);
