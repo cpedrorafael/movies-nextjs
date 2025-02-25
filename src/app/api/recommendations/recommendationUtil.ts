@@ -105,7 +105,7 @@ function calculateSimilarity(watchlistMovies: MovieFeatures[], candidateMovie: M
   return scores.reduce((sum, score) => sum + score, 0) / scores.length;
 }
 
-export async function getTopRatedMovies(limit = 5): Promise<MovieWithScore[]> {
+export async function getTopRatedMovies(limit: number = 5): Promise<MovieWithScore[]> {
   const topRated = await db
     .select()
     .from(movies)

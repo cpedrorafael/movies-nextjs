@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getRecommendations, getTopRatedMovies } from './recommendationUtil';
 import { db } from '@/lib/db';
 import { movies, watchlists } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 
 export async function GET(request: Request) {
   try {
@@ -56,8 +56,12 @@ export async function POST(request: Request) {
     const existingEntry = await db
       .select({ id: watchlists.id })
       .from(watchlists)
-      .where(eq(watchlists.movieId, movieId))
-      .where(eq(watchlists.userId, userId))
+      .where(
+        and(
+          eq(watchlists.movieId, movieId),
+          eq(watchlists.userId, userId)
+        )
+      )
       .limit(1);
 
     if (existingEntry.length > 0) {
