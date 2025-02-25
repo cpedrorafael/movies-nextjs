@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchMovieById } from '@/app/api/movies/movieService';
 
+type tParams = Promise<{ id: string }>;
+
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } } 
+  props: { params: tParams }
 ) {
-  const id = params.id; 
+  const { id } = await props.params;
 
   try {
     const movie = await fetchMovieById(id);
