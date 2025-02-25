@@ -85,7 +85,7 @@ export function Movies() {
   return (
     <div>
       <div className="mb-8">
-        <SearchBar onMovieAdd={handleMovieAdd} />
+        <SearchBar onMovieAdd={handleMovieAdd} watchlist={watchlist} />
       </div>
 
       <Tabs defaultValue="discover" className="w-full">
