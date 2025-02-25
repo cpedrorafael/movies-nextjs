@@ -101,3 +101,16 @@ export const userWatchlist = sqliteTable('user_watchlist', {
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),
 });
+
+export type Rating = 'liked' | 'disliked' | 'neutral';
+
+export const movieRatings = sqliteTable('movie_ratings', {
+  id: integer('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  movieId: integer('movie_id').notNull().references(() => movies.id),
+  rating: text('rating', { enum: ['liked', 'disliked', 'neutral'] }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now'))`),
+});
+
+export type MovieRating = typeof movieRatings.$inferSelect;
+export type InsertMovieRating = typeof movieRatings.$inferInsert;

@@ -8,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth0 } from '@auth0/auth0-react';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
+import type { Rating } from '@/lib/db/schema';
 
 interface Movie {
   id: number;
@@ -20,11 +21,17 @@ interface Movie {
   rottenTomatoesRating: number | null;
 }
 
+interface MovieRating {
+  movieId: number;
+  rating: Rating;
+}
+
 export default function Home() {
   const router = useRouter();
   const { user, logout, isAuthenticated, isLoading: isAuthLoading } = useAuth0();
   const [watchlist, setWatchlist] = useState<Movie[]>([]);
   const [recommendations, setRecommendations] = useState<Movie[]>([]);
+  const [ratings, setRatings] = useState<MovieRating[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("watchlist");
 
@@ -39,21 +46,31 @@ export default function Home() {
     const fetchData = async () => {
       setIsLoading(true);
       try {
+        // Fetch watchlist
         const watchlistResponse = await fetch(`/api/watchlist?userId=${user?.sub}`);
         if (watchlistResponse.ok) {
           const data = await watchlistResponse.json();
           setWatchlist(Array.isArray(data.movies) ? data.movies : []);
         }
 
+        // Fetch recommendations
         const recommendationsResponse = await fetch(`/api/recommendations?userId=${user?.sub}`);
         if (recommendationsResponse.ok) {
           const data = await recommendationsResponse.json();
           setRecommendations(Array.isArray(data) ? data : []);
         }
+
+        // Fetch ratings
+        const ratingsResponse = await fetch(`/api/ratings?userId=${user?.sub}`);
+        if (ratingsResponse.ok) {
+          const data = await ratingsResponse.json();
+          setRatings(Array.isArray(data.ratings) ? data.ratings : []);
+        }
       } catch (error) {
         console.error('Error fetching data:', error);
         setWatchlist([]);
         setRecommendations([]);
+        setRatings([]);
       } finally {
         setIsLoading(false);
       }
@@ -83,6 +100,33 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Error adding movie to watchlist:', error);
+    }
+  };
+
+  const handleMovieRate = async (movieId: number, rating: Rating) => {
+    if (!isAuthenticated || isAuthLoading) return;
+
+    try {
+      const response = await fetch('/api/ratings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          movieId,
+          userId: user?.sub,
+          rating,
+        }),
+      });
+
+      if (response.ok) {
+        setRatings(prev => {
+          const newRatings = prev.filter(r => r.movieId !== movieId);
+          return [...newRatings, { movieId, rating }];
+        });
+      }
+    } catch (error) {
+      console.error('Error rating movie:', error);
     }
   };
 
@@ -140,7 +184,9 @@ export default function Home() {
                     key={movie.id}
                     movie={movie}
                     onToggleWatched={() => {}}
+                    onRate={handleMovieRate}
                     isWatched={true}
+                    rating={ratings.find(r => r.movieId === movie.id)?.rating}
                     id={`movie-${movie.id}`}
                   />
                 ))}
@@ -165,7 +211,9 @@ export default function Home() {
                     key={movie.id}
                     movie={movie}
                     onToggleWatched={() => handleMovieAdd(movie)}
+                    onRate={handleMovieRate}
                     isWatched={false}
+                    rating={ratings.find(r => r.movieId === movie.id)?.rating}
                     id={`movie-${movie.id}`}
                   />
                 ))}

@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { userRatings } from '@/lib/db/schema';
+import { movieRatings, movies, type Rating } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { ratingSchema } from '../config';
 
 export async function GET(request: Request) {
   try {
@@ -17,9 +16,12 @@ export async function GET(request: Request) {
     }
 
     const ratings = await db
-      .select()
-      .from(userRatings)
-      .where(eq(userRatings.userId, userId));
+      .select({
+        movieId: movieRatings.movieId,
+        rating: movieRatings.rating,
+      })
+      .from(movieRatings)
+      .where(eq(movieRatings.userId, userId));
 
     return NextResponse.json({ ratings });
   } catch (error) {
@@ -33,8 +35,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
+    const { movieId, userId, rating } = await request.json();
 
     if (!userId) {
       return NextResponse.json(
@@ -43,44 +44,69 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = await request.json();
-    const validatedRating = ratingSchema.parse(body);
-
-    // Check if user has already rated this movie
-    const existingRating = await db
-      .select()
-      .from(userRatings)
-      .where(
-        and(
-          eq(userRatings.userId, userId),
-          eq(userRatings.movieId, validatedRating.movieId)
-        )
-      )
-      .get();
-
-    if (existingRating) {
+    if (!movieId) {
       return NextResponse.json(
-        { error: 'User has already rated this movie' },
+        { error: 'Movie ID is required' },
         { status: 400 }
       );
     }
 
-    const result = await db.insert(userRatings).values({
-      ...validatedRating,
-      userId,
-    });
+    if (!rating || !['liked', 'disliked', 'neutral'].includes(rating)) {
+      return NextResponse.json(
+        { error: 'Invalid rating value' },
+        { status: 400 }
+      );
+    }
 
-    const rating = await db
+    // Check if movie exists
+    const movieExists = await db
+      .select({ id: movies.id })
+      .from(movies)
+      .where(eq(movies.id, movieId))
+      .limit(1);
+
+    if (movieExists.length === 0) {
+      return NextResponse.json(
+        { error: 'Movie not found' },
+        { status: 404 }
+      );
+    }
+
+    // Update or insert rating
+    const existingRating = await db
       .select()
-      .from(userRatings)
-      .where(eq(userRatings.id, Number(result.lastInsertRowid)))
-      .get();
+      .from(movieRatings)
+      .where(
+        and(
+          eq(movieRatings.userId, userId),
+          eq(movieRatings.movieId, movieId)
+        )
+      )
+      .limit(1);
 
-    return NextResponse.json({ rating }, { status: 201 });
+    if (existingRating.length > 0) {
+      await db
+        .update(movieRatings)
+        .set({ rating: rating as Rating })
+        .where(
+          and(
+            eq(movieRatings.userId, userId),
+            eq(movieRatings.movieId, movieId)
+          )
+        );
+    } else {
+      await db.insert(movieRatings).values({
+        userId,
+        movieId,
+        rating: rating as Rating,
+      });
+    }
+
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error creating rating:', error);
+    console.error('Error updating rating:', error);
     return NextResponse.json(
-      { error: 'Failed to create rating' },
+      { error: 'Failed to update rating' },
       { status: 500 }
     );
   }
