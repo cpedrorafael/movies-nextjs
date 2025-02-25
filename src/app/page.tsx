@@ -128,7 +128,6 @@ export default function Home() {
     }
   };
 
-  // Handle authentication loading state
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4">

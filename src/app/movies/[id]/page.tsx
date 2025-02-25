@@ -1,78 +1,27 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Image from 'next/image';
+import { useState, useEffect } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { Button } from '@/components/ui/button';
+import Image from 'next/image';
 import { BookmarkIcon, BookmarkCheck, ThumbsUp, ThumbsDown, Minus } from 'lucide-react';
 import type { Rating } from '@/lib/db/schema';
 import { toast } from 'sonner';
+import { useParams } from 'next/navigation';
+import type { Movie } from '@/app/api/movies/movie';
 
-interface Movie {
-  id: number;
-  title: string;
-  year: number;
-  director: string;
-  plot: string | null;
-  posterUrl: string | null;
-  imdbRating: number | null;
-  rottenTomatoesRating: number | null;
-  actors: string | null;
-  runtime: string | null;
-  genre: string | null;
-}
-
-export default function MovieDetailsPage({ params }: { params: { id: string } }) {
+export default function MovieDetailsPage() {
+  const params = useParams();
+  const id = params?.id?.toString();
   const { user } = useAuth0();
   const [movie, setMovie] = useState<Movie | null>(null);
   const [isInWatchlist, setIsInWatchlist] = useState(false);
-  const [rating, setRating] = useState<Rating | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        // Fetch movie details
-        const response = await fetch(`/api/movies/${params.id}`);
-        if (response.ok) {
-          const data = await response.json();
-          setMovie(data);
-        }
-
-        // Only fetch user-specific data if we have a user
-        if (user?.sub) {
-          // Check if movie is in watchlist
-          const watchlistResponse = await fetch(`/api/watchlist?userId=${user.sub}`);
-          if (watchlistResponse.ok) {
-            const data = await watchlistResponse.json();
-            setIsInWatchlist(data.movies.some((m: Movie) => m.id === parseInt(params.id)));
-          }
-
-          // Get user's rating
-          const ratingsResponse = await fetch(`/api/ratings?userId=${user.sub}`);
-          if (ratingsResponse.ok) {
-            const data = await ratingsResponse.json();
-            const movieRating = data.ratings.find((r: { movieId: number }) => 
-              r.movieId === parseInt(params.id)
-            );
-            setRating(movieRating?.rating || null);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching movie details:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [params.id, user?.sub]);
+  const [error, setError] = useState<string | null>(null);
+  const [rating, setRating] = useState<Rating | null>(null);
 
   const handleToggleWatchlist = async () => {
     if (!user?.sub || !movie) return;
-
-    const isCurrentlyInWatchlist = isInWatchlist;
 
     try {
       const response = await fetch('/api/watchlist', {
@@ -87,16 +36,17 @@ export default function MovieDetailsPage({ params }: { params: { id: string } })
       });
 
       if (response.ok) {
+        const isCurrentlyInWatchlist = isInWatchlist;
         setIsInWatchlist(prev => !prev);
         toast.success(
           isCurrentlyInWatchlist 
-            ? `${movie.title} has been removed from your watchlist`
-            : `${movie.title} has been added to your watchlist`
+            ? `${movie.Title} removed from watchlist`
+            : `${movie.Title} added to watchlist`
         );
       }
     } catch (error) {
-      console.error('Error toggling watchlist:', error);
-      toast.error("Failed to update watchlist. Please try again.");
+      console.error('Error updating watchlist:', error);
+      toast.error('Failed to update watchlist');
     }
   };
 
@@ -118,184 +68,226 @@ export default function MovieDetailsPage({ params }: { params: { id: string } })
 
       if (response.ok) {
         setRating(newRating);
+        toast.success(`Rating updated for ${movie.Title}`);
+      } else {
+        toast.error('Failed to update rating');
       }
     } catch (error) {
       console.error('Error rating movie:', error);
+      toast.error('Failed to update rating');
     }
   };
 
-  if (isLoading && !movie) {
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!id) {
+        setError('No movie ID provided');
+        setIsLoading(false);
+        return;
+      }
+      
+      setIsLoading(true);
+      setError(null);
+      
+      try {
+        const response = await fetch(`/api/movies/${id}`);
+        console.log('Movie API Response:', response.status);
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to fetch movie details');
+        }
+
+        const data = await response.json();
+        console.log('Movie data:', data);
+        
+        if (!data) {
+          throw new Error('No movie data received');
+        }
+
+        setMovie(data);
+
+        if (user?.sub) {
+          const watchlistResponse = await fetch(`/api/watchlist?userId=${user.sub}`);
+          if (watchlistResponse.ok) {
+            const data = await watchlistResponse.json();
+            console.log(data);
+            setIsInWatchlist(data.watchlist.some((m: Movie) => m.id === parseInt(id)));
+          }
+
+          const ratingsResponse = await fetch(`/api/ratings?userId=${user.sub}`);
+          if (ratingsResponse.ok) {
+            const data = await ratingsResponse.json();
+            const movieRating = data.ratings.find((r: { movieId: number }) => 
+              r.movieId === parseInt(id)
+            );
+            setRating(movieRating?.rating || null);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching movie data:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load movie details');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [id, user?.sub]);
+
+  if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <p className="text-red-500 mb-4">{error}</p>
+        <Button onClick={() => window.history.back()}>Go Back</Button>
       </div>
     );
   }
 
   if (!movie) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-lg text-muted-foreground">Movie not found</div>
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <p className="text-gray-500 mb-4">Movie not found</p>
+        <Button onClick={() => window.history.back()}>Go Back</Button>
       </div>
     );
   }
 
   return (
     <main className="container mx-auto py-8 px-4">
-      <div className="mb-6">
-        <Button
-          variant="ghost"
-          onClick={() => window.history.back()}
-          className="flex items-center gap-2 hover:bg-transparent hover:text-primary"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-4 w-4"
-          >
-            <path d="m12 19-7-7 7-7" />
-            <path d="M19 12H5" />
-          </svg>
-          Back
-        </Button>
-      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        {/* Left column - Image and Ratings */}
+        <div className="space-y-6">
+          {/* Movie Poster */}
+          {movie.Poster && movie.Poster !== 'N/A' ? (
+            <div className="relative aspect-[2/3] w-full">
+              <Image
+                src={movie.Poster}
+                alt={movie.Title}
+                fill
+                className="object-cover rounded-lg"
+                sizes="(max-width: 768px) 100vw, 33vw"
+                priority
+              />
+            </div>
+          ) : (
+            <div className="aspect-[2/3] w-full bg-gray-200 rounded-lg flex items-center justify-center">
+              <span className="text-gray-400">No poster available</span>
+            </div>
+          )}
 
-      <div className="bg-card rounded-lg shadow-lg overflow-hidden">
-        <div className="md:flex">
-          <div className="md:w-1/4">
-            {movie.posterUrl && movie.posterUrl !== 'N/A' ? (
-              <div className="relative aspect-[2/3] max-h-[400px]">
-                <Image
-                  src={movie.posterUrl}
-                  alt={movie.title}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 768px) 100vw, 25vw"
-                  priority
-                />
+          {/* User Ratings */}
+          {user && (
+            <div className="space-y-2">
+              <h3 className="font-semibold text-lg">Your Rating</h3>
+              <div className="flex flex-col gap-2">
+                <Button
+                  size="sm"
+                  variant={rating === 'liked' ? 'default' : 'outline'}
+                  onClick={() => handleRate('liked')}
+                  className="flex items-center justify-center gap-2 w-full"
+                >
+                  <ThumbsUp className="h-4 w-4" />
+                  Like
+                </Button>
+                <Button
+                  size="sm"
+                  variant={rating === 'neutral' ? 'default' : 'outline'}
+                  onClick={() => handleRate('neutral')}
+                  className="flex items-center justify-center gap-2 w-full"
+                >
+                  <Minus className="h-4 w-4" />
+                  Neutral
+                </Button>
+                <Button
+                  size="sm"
+                  variant={rating === 'disliked' ? 'default' : 'outline'}
+                  onClick={() => handleRate('disliked')}
+                  className="flex items-center justify-center gap-2 w-full"
+                >
+                  <ThumbsDown className="h-4 w-4" />
+                  Dislike
+                </Button>
               </div>
-            ) : (
-              <div className="aspect-[2/3] max-h-[400px] bg-muted flex items-center justify-center">
-                <span className="text-muted-foreground">No poster available</span>
+            </div>
+          )}
+        </div>
+
+        {/* Right column - Title, Metadata, and Details */}
+        <div className="md:col-span-2 space-y-6">
+          {/* Title and Bookmark */}
+          <div className="flex items-start justify-between">
+            <div className="space-y-2">
+              <h1 className="text-4xl font-bold">{movie.Title}</h1>
+              <div className="flex gap-4 text-sm text-muted-foreground">
+                <span>{movie.Year}</span>
+                <span>{movie.Runtime}</span>
+                <span>{movie.Rated}</span>
               </div>
+            </div>
+            {user && (
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleToggleWatchlist}
+                title={isInWatchlist ? "Remove from watchlist" : "Add to watchlist"}
+              >
+                {isInWatchlist ? (
+                  <BookmarkCheck className="h-5 w-5" />
+                ) : (
+                  <BookmarkIcon className="h-5 w-5" />
+                )}
+              </Button>
             )}
-            <div className="p-4 space-y-4 border-t">
-              {movie.actors && (
-                <div>
-                  <h3 className="font-semibold mb-1">Cast</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {movie.actors.split(',').map((actor, index) => (
-                      <span key={actor}>
-                        {actor.trim()}
-                        {index < movie.actors!.split(',').length - 1 && ', '}
-                      </span>
-                    ))}
-                  </p>
-                </div>
-              )}
-              {movie.runtime && (
-                <div>
-                  <h3 className="font-semibold mb-1">Runtime</h3>
-                  <p className="text-sm text-muted-foreground">{movie.runtime}</p>
-                </div>
-              )}
-              {movie.genre && (
-                <div>
-                  <h3 className="font-semibold mb-1">Genre</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {movie.genre.split(',').map((g, index) => (
-                      <span key={g}>
-                        {g.trim()}
-                        {index < movie.genre!.split(',').length - 1 && ', '}
-                      </span>
-                    ))}
-                  </p>
-                </div>
-              )}
+          </div>
+
+          {/* Movie Details Grid */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <h3 className="font-semibold">Director</h3>
+              <p className="text-muted-foreground">{movie.Director}</p>
+            </div>
+            <div>
+              <h3 className="font-semibold">Cast</h3>
+              <p className="text-muted-foreground">{movie.Actors}</p>
+            </div>
+            <div>
+              <h3 className="font-semibold">Genre</h3>
+              <p className="text-muted-foreground">{movie.Genre}</p>
+            </div>
+            <div>
+              <h3 className="font-semibold">Language</h3>
+              <p className="text-muted-foreground">{movie.Language}</p>
             </div>
           </div>
-          <div className="p-6 md:w-3/4">
-            <div className="flex items-start justify-between gap-4">
-              <h1 className="text-2xl font-bold">{movie.title}</h1>
-              {user && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleToggleWatchlist}
-                  className="shrink-0"
-                >
-                  {isInWatchlist ? (
-                    <BookmarkCheck className="h-6 w-6" />
-                  ) : (
-                    <BookmarkIcon className="h-6 w-6" />
-                  )}
-                  <span className="sr-only">
-                    {isInWatchlist ? 'Remove from watchlist' : 'Add to watchlist'}
-                  </span>
-                </Button>
-              )}
-            </div>
-            
-            <div className="mt-2 space-y-4">
-              <p className="text-lg text-muted-foreground">
-                {movie.year} • {movie.director}
-              </p>
-              
-              {movie.plot && (
-                <p className="text-muted-foreground">{movie.plot}</p>
-              )}
 
-              <div className="flex flex-wrap items-center gap-6">
-                {movie.imdbRating && movie.imdbRating !== 0 && (
-                  <div className="flex items-center">
-                    <span className="font-semibold mr-2">IMDb:</span>
-                    <span className="text-muted-foreground">{movie.imdbRating}/10</span>
+          {/* Ratings */}
+          {movie.Ratings && movie.Ratings.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="font-semibold">Ratings</h3>
+              <div className="flex flex-wrap gap-6">
+                {movie.Ratings.map((rating, index) => (
+                  <div key={index} className="flex flex-col">
+                    <span className="text-sm text-muted-foreground">{rating.Source}</span>
+                    <span className="font-medium">{rating.Value}</span>
                   </div>
-                )}
-                {movie.rottenTomatoesRating && movie.rottenTomatoesRating !== 0 && (
-                  <div className="flex items-center">
-                    <span className="font-semibold mr-2">Rotten Tomatoes:</span>
-                    <span className="text-muted-foreground">{movie.rottenTomatoesRating}%</span>
-                  </div>
-                )}
+                ))}
               </div>
-
-              {user && (
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant={rating === 'liked' ? 'default' : 'outline'}
-                    onClick={() => handleRate('liked')}
-                  >
-                    <ThumbsUp className="h-4 w-4 mr-2" />
-                    Like
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={rating === 'neutral' ? 'default' : 'outline'}
-                    onClick={() => handleRate('neutral')}
-                  >
-                    <Minus className="h-4 w-4 mr-2" />
-                    Neutral
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={rating === 'disliked' ? 'default' : 'outline'}
-                    onClick={() => handleRate('disliked')}
-                  >
-                    <ThumbsDown className="h-4 w-4 mr-2" />
-                    Dislike
-                  </Button>
-                </div>
-              )}
             </div>
+          )}
+
+          {/* Plot */}
+          <div className="space-y-2">
+            <h3 className="font-semibold">Plot</h3>
+            <p className="text-lg leading-relaxed">{movie.Plot}</p>
           </div>
         </div>
       </div>

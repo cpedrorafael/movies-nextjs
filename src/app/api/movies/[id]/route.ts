@@ -1,19 +1,13 @@
-import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { movies } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { NextRequest, NextResponse } from 'next/server';
+import { fetchMovieById } from '@/app/api/movies/movieService';
 
 export async function GET(
-  request: Request,
-  { params }: { params: { id: string } } 
+  request: NextRequest,
+  { params }: { params: { id: string } }
 ) {
   try {
-    const movie = await db
-      .select()
-      .from(movies)
-      .where(eq(movies.id, parseInt(params.id)))
-      .get();
-
+    const { id } = await params;
+    const movie = await fetchMovieById(id);
     if (!movie) {
       return NextResponse.json(
         { error: 'Movie not found' },
