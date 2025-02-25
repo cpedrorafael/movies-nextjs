@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { SearchIcon } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
 import { toast } from 'sonner';
+import { useAuth0 } from '@auth0/auth0-react';
 
 interface Movie {
   Title: string;
@@ -29,6 +30,7 @@ export function SearchBar({ onMovieAdd, watchlist }: SearchBarProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<Movie[]>([]);
   const [showResults, setShowResults] = useState(false);
+  const { user, isAuthenticated } = useAuth0();
 
   const handleSearch = async () => {
     if (!query.trim()) return;
@@ -52,6 +54,11 @@ export function SearchBar({ onMovieAdd, watchlist }: SearchBarProps) {
   };
 
   const handleAddMovie = async (movie: Movie) => {
+    if (!isAuthenticated || !user?.sub) {
+      toast.error('Please log in to add movies to your watchlist');
+      return;
+    }
+
     try {
       const rottenTomatoesRating = movie.Ratings?.find(
         (r) => r.Source === 'Rotten Tomatoes'
@@ -123,7 +130,7 @@ export function SearchBar({ onMovieAdd, watchlist }: SearchBarProps) {
         },
         body: JSON.stringify({ 
           movieId: savedMovie.movie.id,
-          watched: false 
+          userId: user.sub,
         }),
       });
 

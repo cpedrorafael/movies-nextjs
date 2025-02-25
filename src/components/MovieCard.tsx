@@ -5,17 +5,19 @@ import { ThumbsUp, ThumbsDown, Minus, BookmarkIcon, BookmarkCheck } from 'lucide
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
+interface Movie {
+  id: number;
+  title: string;
+  year: number;
+  director: string;
+  plot: string | null;
+  posterUrl: string | null;
+  imdbRating: number | null;
+  rottenTomatoesRating: number | null;
+}
+
 interface MovieCardProps {
-  movie: {
-    id: number;
-    title: string;
-    year: number;
-    director: string;
-    plot: string | null;
-    posterUrl: string | null;
-    imdbRating: number | null;
-    rottenTomatoesRating: number | null;
-  };
+  movie: Movie;
   onToggleWatched: (id: number) => void;
   onRate?: (id: number, rating: 'liked' | 'disliked' | 'neutral') => void;
   isWatched: boolean;

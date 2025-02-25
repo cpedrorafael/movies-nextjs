@@ -6,6 +6,7 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { Button } from '@/components/ui/button';
 import { BookmarkIcon, BookmarkCheck, ThumbsUp, ThumbsDown, Minus } from 'lucide-react';
 import type { Rating } from '@/lib/db/schema';
+import { toast } from 'sonner';
 
 interface Movie {
   id: number;
@@ -71,6 +72,8 @@ export default function MovieDetailsPage({ params }: { params: { id: string } })
   const handleToggleWatchlist = async () => {
     if (!user?.sub || !movie) return;
 
+    const isCurrentlyInWatchlist = isInWatchlist;
+
     try {
       const response = await fetch('/api/watchlist', {
         method: 'POST',
@@ -85,9 +88,15 @@ export default function MovieDetailsPage({ params }: { params: { id: string } })
 
       if (response.ok) {
         setIsInWatchlist(prev => !prev);
+        toast.success(
+          isCurrentlyInWatchlist 
+            ? `${movie.title} has been removed from your watchlist`
+            : `${movie.title} has been added to your watchlist`
+        );
       }
     } catch (error) {
       console.error('Error toggling watchlist:', error);
+      toast.error("Failed to update watchlist. Please try again.");
     }
   };
 

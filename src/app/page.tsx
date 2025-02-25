@@ -1,14 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { SearchBar } from '@/components/SearchBar';
-import { MovieCard } from '@/components/MovieCard';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { MovieCard } from '@/components/MovieCard';
+import { SearchBar } from '@/components/SearchBar';
 import { useAuth0 } from '@auth0/auth0-react';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
-import type { Rating } from '@/lib/db/schema';
+import { toast } from 'sonner';
 
 interface Movie {
   id: number;
@@ -21,17 +21,11 @@ interface Movie {
   rottenTomatoesRating: number | null;
 }
 
-interface MovieRating {
-  movieId: number;
-  rating: Rating;
-}
-
 export default function Home() {
   const router = useRouter();
-  const { user, logout, isAuthenticated, isLoading: isAuthLoading } = useAuth0();
+  const { user, logout, isAuthenticated } = useAuth0();
   const [watchlist, setWatchlist] = useState<Movie[]>([]);
   const [recommendations, setRecommendations] = useState<Movie[]>([]);
-  const [ratings, setRatings] = useState<MovieRating[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("watchlist");
 
@@ -41,46 +35,31 @@ export default function Home() {
       return;
     }
 
-    if (!isAuthenticated || isAuthLoading) return;
-
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        // Fetch watchlist
-        const watchlistResponse = await fetch(`/api/watchlist?userId=${user?.sub}`);
+        const watchlistResponse = await fetch(`/api/watchlist?userId=${user.sub}`);
         if (watchlistResponse.ok) {
           const data = await watchlistResponse.json();
-          setWatchlist(Array.isArray(data.movies) ? data.movies : []);
+          setWatchlist(data.watchlist || []);
         }
 
-        // Fetch recommendations
-        const recommendationsResponse = await fetch(`/api/recommendations?userId=${user?.sub}`);
-        if (recommendationsResponse.ok) {
-          const data = await recommendationsResponse.json();
-          setRecommendations(Array.isArray(data) ? data : []);
-        }
+       fetchRecommendations();
 
-        // Fetch ratings
-        const ratingsResponse = await fetch(`/api/ratings?userId=${user?.sub}`);
-        if (ratingsResponse.ok) {
-          const data = await ratingsResponse.json();
-          setRatings(Array.isArray(data.ratings) ? data.ratings : []);
-        }
       } catch (error) {
         console.error('Error fetching data:', error);
         setWatchlist([]);
         setRecommendations([]);
-        setRatings([]);
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchData();
-  }, [user?.sub, isAuthenticated, isAuthLoading, router]);
+  }, [user]);
 
-  const handleMovieAdd = async (movie: Movie) => {
-    if (!isAuthenticated || isAuthLoading) return;
+  const handleMovieAdd = async (movie: Movie, isRemove: boolean = false) => {
+    if (!user?.sub) return;
 
     try {
       const response = await fetch('/api/watchlist', {
@@ -88,58 +67,78 @@ export default function Home() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           movieId: movie.id,
-          userId: user?.sub
+          userId: user.sub,
         }),
       });
 
       if (response.ok) {
+        if (isRemove) {
+          setWatchlist(prev => prev.filter(m => m.id !== movie.id));
+          toast.success(`${movie.title} removed from watchlist`);
+          return;
+        }
         setWatchlist(prev => [...prev, movie]);
-        setRecommendations(prev => prev.filter(m => m.id !== movie.id));
+        toast.success(`${movie.title} added to watchlist`);
       }
     } catch (error) {
-      console.error('Error adding movie to watchlist:', error);
+      console.error('Error managing watchlist:', error);
+      toast.error('Failed to update watchlist');
+    } finally {
+      setIsLoading(false);
+      updateRecommendations(movie);
     }
   };
 
-  const handleMovieRate = async (movieId: number, rating: Rating) => {
-    if (!isAuthenticated || isAuthLoading) return;
+  const updateRecommendations = async (movie: Movie) => {
+    if (!user?.sub) return;
 
     try {
-      const response = await fetch('/api/ratings', {
+      const response = await fetch('/api/recommendations', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          movieId,
-          userId: user?.sub,
-          rating,
+          userId: user.sub,
+          movieId: movie.id,
         }),
       });
 
       if (response.ok) {
-        setRatings(prev => {
-          const newRatings = prev.filter(r => r.movieId !== movieId);
-          return [...newRatings, { movieId, rating }];
-        });
+        const data = await response.json();
+        setRecommendations(data.recommendations || []);
       }
-    } catch (error) {
-      console.error('Error rating movie:', error);
+    }catch (error) {
+      console.error('Error updating recommendations:', error);
+    } 
+    finally {
+      fetchRecommendations();
     }
-  };
+  }
 
-  if (isAuthLoading) {
+  const fetchRecommendations = async () => {
+    if (!user?.sub) return;
+
+    try {
+      const response = await fetch('/api/recommendations?userId=' + user.sub);
+      if (response.ok) {
+        const data = await response.json();
+        console.log(data);
+        setRecommendations(data || []);
+      }
+    }catch (error) {
+      console.error('Error fetching recommendations:', error);
+    }
+  }
+
+  if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
-  }
-
-  if (!isAuthenticated) {
-    return null;
   }
 
   return (
@@ -148,7 +147,7 @@ export default function Home() {
         <h1 className="text-2xl font-bold">Movies App</h1>
         <div className="flex items-center gap-4">
           <span className="text-sm text-muted-foreground">
-            {user?.name || user?.email}
+            {user.name || user.email}
           </span>
           <Button
             variant="outline"
@@ -183,10 +182,8 @@ export default function Home() {
                   <MovieCard
                     key={movie.id}
                     movie={movie}
-                    onToggleWatched={() => {}}
-                    onRate={handleMovieRate}
+                    onToggleWatched={() => handleMovieAdd(movie, true)}
                     isWatched={true}
-                    rating={ratings.find(r => r.movieId === movie.id)?.rating}
                     id={`movie-${movie.id}`}
                   />
                 ))}
@@ -196,7 +193,11 @@ export default function Home() {
         </TabsContent>
 
         <TabsContent value="recommendations" className="space-y-4">
-          {recommendations.length === 0 ? (
+          {isLoading ? (
+            <div className="text-center">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : recommendations.length === 0 ? (
             <div className="text-center text-muted-foreground">
               Add movies to your watchlist to get personalized recommendations.
             </div>
@@ -211,9 +212,7 @@ export default function Home() {
                     key={movie.id}
                     movie={movie}
                     onToggleWatched={() => handleMovieAdd(movie)}
-                    onRate={handleMovieRate}
                     isWatched={false}
-                    rating={ratings.find(r => r.movieId === movie.id)?.rating}
                     id={`movie-${movie.id}`}
                   />
                 ))}

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { movies, userWatchlist } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 
 export async function GET(request: Request) {
   try {
@@ -9,13 +9,10 @@ export async function GET(request: Request) {
     const userId = searchParams.get('userId');
 
     if (!userId) {
-      return NextResponse.json(
-        { error: 'User ID is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
-    const watchlistMovies = await db
+    const watchlist = await db
       .select({
         id: movies.id,
         title: movies.title,
@@ -26,11 +23,11 @@ export async function GET(request: Request) {
         imdbRating: movies.imdbRating,
         rottenTomatoesRating: movies.rottenTomatoesRating,
       })
-      .from(movies)
-      .innerJoin(userWatchlist, eq(movies.id, userWatchlist.movieId))
+      .from(userWatchlist)
+      .innerJoin(movies, eq(userWatchlist.movieId, movies.id))
       .where(eq(userWatchlist.userId, userId));
 
-    return NextResponse.json({ movies: watchlistMovies });
+    return NextResponse.json({ watchlist });
   } catch (error) {
     console.error('Error fetching watchlist:', error);
     return NextResponse.json(
@@ -42,34 +39,54 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { movieId, userId } = await request.json();
+    const body = await request.json();
+    const { movieId, userId } = body;
 
     if (!userId) {
-      return NextResponse.json(
-        { error: 'User ID is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
     if (!movieId) {
-      return NextResponse.json(
-        { error: 'Movie ID is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Movie ID is required' }, { status: 400 });
     }
 
     // Check if movie exists
-    const movieExists = await db
-      .select({ id: movies.id })
+    const movie = await db
+      .select()
       .from(movies)
       .where(eq(movies.id, movieId))
       .limit(1);
 
-    if (movieExists.length === 0) {
+    if (!movie.length) {
       return NextResponse.json(
         { error: 'Movie not found' },
         { status: 404 }
       );
+    }
+
+    // Check if movie is already in watchlist
+    const isAlreadyInWatchlist = await db
+      .select({ id: userWatchlist.id })
+      .from(userWatchlist)
+      .where(
+        and(
+          eq(userWatchlist.userId, userId),
+          eq(userWatchlist.movieId, movieId)
+        )
+      )
+      .limit(1);
+
+    if (isAlreadyInWatchlist.length > 0) {
+      // Remove from watchlist
+      await db.delete(userWatchlist)
+        .where(
+          and(
+            eq(userWatchlist.userId, userId),
+            eq(userWatchlist.movieId, movieId)
+          )
+        );
+
+      return NextResponse.json({ success: true });
     }
 
     // Add to watchlist
@@ -78,27 +95,11 @@ export async function POST(request: Request) {
       movieId,
     });
 
-    // Get the added movie details
-    const addedMovie = await db
-      .select({
-        id: movies.id,
-        title: movies.title,
-        year: movies.year,
-        director: movies.director,
-        plot: movies.plot,
-        posterUrl: movies.posterUrl,
-        imdbRating: movies.imdbRating,
-        rottenTomatoesRating: movies.rottenTomatoesRating,
-      })
-      .from(movies)
-      .where(eq(movies.id, movieId))
-      .limit(1);
-
-    return NextResponse.json({ movie: addedMovie[0] });
+    return NextResponse.json({ success: true, movie: movie[0] });
   } catch (error) {
-    console.error('Error adding to watchlist:', error);
+    console.error('Error managing watchlist:', error);
     return NextResponse.json(
-      { error: 'Failed to add to watchlist' },
+      { error: 'Failed to manage watchlist' },
       { status: 500 }
     );
   }

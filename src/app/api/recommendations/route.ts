@@ -31,6 +31,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+
     const { movieId, userId } = await request.json();
 
     if (!userId) {
@@ -74,9 +75,10 @@ export async function POST(request: Request) {
       .limit(1);
 
     if (existingEntry.length > 0) {
+      console.log('Movie already in watchlist');
       return NextResponse.json(
-        { error: 'Movie already in watchlist' },
-        { status: 400 }
+        { message: 'Movie already in watchlist' },
+        { status: 200 }
       );
     }
 
