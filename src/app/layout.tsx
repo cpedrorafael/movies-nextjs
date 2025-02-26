@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
-import { ThemeProvider } from '@/components/theme-provider';
-import { AuthProvider } from '@/components/auth/AuthProvider';
+import { Providers } from './providers';
+import { Toaster } from '@/components/ui/sonner';
 
 const geist = Geist({
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "Movies App",
-  description: "A movies app built with Next.js",
+  title: "Movies",
+  description: "Track and rate your favorite movies",
 };
 
 export default function RootLayout({
@@ -21,13 +21,14 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${geist.className} antialiased bg-background text-foreground`}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <AuthProvider>
-            <div className="relative flex min-h-screen flex-col">
-              <div className="flex-1">{children}</div>
+        <Providers>
+          <div className="relative flex min-h-screen flex-col">
+            <div className="flex-1">
+              {children}
             </div>
-          </AuthProvider>
-        </ThemeProvider>
+          </div>
+          <Toaster />
+        </Providers>
       </body>
     </html>
   );

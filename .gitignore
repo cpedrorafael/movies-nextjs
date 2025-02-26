@@ -43,3 +43,5 @@ next-env.d.ts
 
 # db
 movies.db
+
+docker-compose.yml

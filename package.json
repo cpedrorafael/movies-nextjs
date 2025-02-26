@@ -34,7 +34,7 @@
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.50.1",
     "shadcn-ui": "^0.9.4",
-    "sonner": "^2.0.0",
+    "sonner": "^2.0.1",
     "string-similarity": "^4.0.4",
     "tailwind-merge": "^2.2.1",
     "zod": "^3.22.4"
